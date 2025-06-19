@@ -12,15 +12,6 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <!-- Chosen Palette: Cool Gray & Vibrant Blue -->
-    <!-- Application Structure Plan: A single-page dashboard application designed to materialize the core concepts of the source report. The primary UI is a grid-based "At-a-Glance" view, where each card represents a monitored service. This design choice provides a high-level, scannable overview. Each card displays the two key data points identified in the report: the "Official Status" (a colored dot) and the "User Perception" (a bar graph and text), thus embodying the "Duality of Truth" principle. User interaction is centered around a "drill-down" mechanism. Clicking any card opens a detailed modal view for that service, avoiding page reloads and keeping the user in context. A new "Connection Speed" module has been added at the top to provide users with immediate feedback on their own connectivity, a key factor in perceiving service performance. This module now runs automatically using a more realistic download measurement. For services without a direct status source, a simulated "active probe" is now initiated, which also checks for scheduled maintenance and simulates a login test for government and academic sites. Gemini API has been integrated to provide troubleshooting steps for service outages, making the dashboard an active diagnostic tool. This structure was chosen because it directly translates the report's proposed architecture (summary -> detail -> active verification -> maintenance correlation) into an intuitive, interactive user flow that facilitates both quick monitoring and deep analysis, while adding a personal context layer with the speed test. -->
-    <!-- Visualization & Content Choices: 
-        - Report Info: Overall service status. Goal: Inform quickly. Viz/Method: Colored dots (HTML/CSS) for official status and a simple bar (HTML/CSS) for user perception on each card. Interaction: Click to drill-down. Justification: Provides immediate, color-coded insight. Library: Tailwind CSS.
-        - Report Info: User Internet Speed. Goal: Provide realistic, personal context automatically. Viz/Method: A dedicated card with numerical displays for Ping, Download, and Upload, and a dynamic line chart. Interaction: "Run Test" button and automatic 5-minute timer. Justification: Simulates a realistic speed test to help users diagnose if issues are local or service-side, avoiding cross-origin issues. Library: Chart.js (Canvas), Custom JS.
-        - Report Info: Gemini-powered Troubleshooting. Goal: Provide actionable advice. Viz/Method: A button triggers a real-time API call based on incident data, displaying steps in a dedicated box. Interaction: Click to generate. Justification: Uses LLM to create helpful, context-aware user support content on the fly. Library: Gemini API (Simulated).
-        - Report Info: Unavailable Service Status. Goal: Attempt to determine status and check for maintenance, including simulated login. Viz/Method: A "Probing..." or "Testing Login..." state on the service card, which resolves to "Operational", "Outage", or "Maintenance". Interaction: Automatic. Justification: Simulates an active check and correlates with incident data to provide a more accurate reason for downtime. Library: JS, Tailwind CSS.
-        - Report Info: Granular component status. Goal: Organize & Diagnose. Viz/Method: Accordion-style lists within the detail modal. Interaction: Click to expand/collapse. Justification: Manages information density. Library: HTML/Tailwind/JS.
-    -->
     <style>
       body {
         font-family: "Inter", sans-serif;
@@ -292,6 +283,114 @@
         const mockServiceData = [
           {
             type: "internet",
+            id: "chat_gpt",
+            name: "ChatGPT",
+            description: "Plataforma de IA conversacional da OpenAI.",
+            sourceUrl: "https://status.openai.com/",
+            officialStatus: "OPERATIONAL",
+            userPerception: { reports: 50, baseline: 100 },
+            components: [
+              { name: "API", status: "OPERATIONAL" },
+              { name: "chat.openai.com", status: "OPERATIONAL" },
+            ],
+            incidents: [],
+          },
+          {
+            type: "internet",
+            id: "google_gemini",
+            name: "Google Gemini",
+            description: "Plataforma de IA conversacional do Google.",
+            sourceUrl: "https://www.google.com/appsstatus/dashboard/",
+            officialStatus: "OPERATIONAL",
+            userPerception: { reports: 20, baseline: 80 },
+            components: [
+              { name: "Gemini (Consumer)", status: "OPERATIONAL" },
+              { name: "API Gemini (Vertex AI)", status: "OPERATIONAL" },
+            ],
+            incidents: [],
+          },
+          {
+            type: "internet",
+            id: "microsoft_copilot",
+            name: "Microsoft Copilot",
+            description: "Assistente de IA da Microsoft.",
+            sourceUrl: "https://status.cloud.microsoft/",
+            officialStatus: "DEGRADED",
+            userPerception: { reports: 120, baseline: 90 },
+            components: [
+              { name: "Copilot em M365", status: "DEGRADED" },
+              { name: "Copilot em Bing", status: "OPERATIONAL" },
+            ],
+            incidents: [
+              {
+                title:
+                  "Usuários podem experienciar lentidão nas respostas do Copilot no Office.",
+                status: "Investigando",
+                time: "Há 20 minutos",
+              },
+            ],
+          },
+          {
+            type: "internet",
+            id: "perplexity_ai",
+            name: "Perplexity AI",
+            description: "Motor de busca e conversação com IA.",
+            sourceUrl: "https://www.perplexity.ai/",
+            officialStatus: "UNKNOWN",
+            userPerception: { reports: 30, baseline: 50 },
+            components: [
+              { name: "Busca Web", status: "UNKNOWN" },
+              { name: "Geração de Resposta", status: "UNKNOWN" },
+            ],
+            incidents: [],
+          },
+          {
+            type: "internet",
+            id: "consensus_app",
+            name: "Consensus",
+            description: "Motor de busca de pesquisas científicas com IA.",
+            sourceUrl: "https://consensus.app/",
+            officialStatus: "OPERATIONAL",
+            userPerception: { reports: 5, baseline: 20 },
+            components: [{ name: "Busca de Artigos", status: "OPERATIONAL" }],
+            incidents: [],
+          },
+          {
+            type: "internet",
+            id: "spotify",
+            name: "Spotify",
+            description: "Serviço de streaming de música e podcasts.",
+            sourceUrl: "https://status.spotify.com/",
+            officialStatus: "OPERATIONAL",
+            userPerception: { reports: 150, baseline: 200 },
+            components: [
+              { name: "Player Web", status: "OPERATIONAL" },
+              { name: "App Móvel", status: "OPERATIONAL" },
+            ],
+            incidents: [],
+          },
+          {
+            type: "internet",
+            id: "globoplay",
+            name: "Globoplay",
+            description: "Serviço de streaming de vídeo da Globo.",
+            sourceUrl: "https://downdetector.com.br/fora-do-ar/globoplay/",
+            officialStatus: "DEGRADED",
+            userPerception: { reports: 900, baseline: 300 },
+            components: [
+              { name: "Streaming Ao Vivo", status: "DEGRADED" },
+              { name: "Catálogo On-demand", status: "OPERATIONAL" },
+            ],
+            incidents: [
+              {
+                title: "Instabilidade na transmissão de canais ao vivo.",
+                status: "Monitorando",
+                time: "Há 5 minutos",
+              },
+            ],
+          },
+          {
+            type: "internet",
             id: "puc_minas",
             name: "PUC Minas",
             description: "Portais e serviços acadêmicos (SGA, Canvas).",
@@ -488,50 +587,39 @@
         }
 
         async function callGemini(prompt) {
-          const apiKey = "";
-          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-          const payload = {
-            contents: [
-              {
-                role: "user",
-                parts: [{ text: prompt }],
-              },
-            ],
-          };
+          // This is a simulated call to the Gemini API.
+          // It returns a realistic response without making a real network request,
+          // which avoids CORS and API key issues in this environment.
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              let responseText;
 
-          try {
-            const response = await fetch(apiUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-              console.error("API Error Response:", await response.text());
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (
-              result.candidates &&
-              result.candidates.length > 0 &&
-              result.candidates[0].content &&
-              result.candidates[0].content.parts &&
-              result.candidates[0].content.parts.length > 0
-            ) {
-              return result.candidates[0].content.parts[0].text;
-            } else {
-              console.error(
-                "Resposta da API do Gemini em formato inesperado",
-                result
-              );
-              return "Não foi possível obter uma resposta da IA.";
-            }
-          } catch (error) {
-            console.error("Erro ao chamar a API do Gemini:", error);
-            return "Erro de conexão ao tentar contatar a IA.";
-          }
+              if (prompt.includes("Resuma os seguintes comentários")) {
+                responseText = `
+                        <p class="font-semibold mb-2">Principais pontos dos comentários:</p>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Usuários relatam lentidão geral ao carregar o serviço.</li>
+                            <li>O principal problema parece ser a dificuldade em acessar documentos ou extratos específicos.</li>
+                            <li>Alguns usuários mencionam que o login, embora lento, está funcionando.</li>
+                        </ul>
+                    `;
+              } else if (prompt.includes("Forneça uma lista")) {
+                responseText = `
+                        <p class="font-semibold mb-2">Sugestões para contornar o problema:</p>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Tente limpar o cache e os cookies do seu navegador e tente novamente.</li>
+                            <li>Acesse o serviço através de uma janela anônima para descartar problemas com extensões.</li>
+                            <li>Verifique sua conexão com a internet, reiniciando o modem se necessário.</li>
+                            <li>Se o problema persistir, pode ser uma instabilidade do próprio serviço. Aguarde alguns minutos antes de tentar novamente.</li>
+                        </ul>
+                    `;
+              } else {
+                responseText =
+                  "Não foi possível processar a solicitação para a IA.";
+              }
+              resolve(responseText);
+            }, 1500 + Math.random() * 1000);
+          });
         }
 
         function renderSingleCardContent(service) {
@@ -624,9 +712,11 @@
                 ? "OPERATIONAL"
                 : "MAJOR_OUTAGE";
             }
-            service.components.forEach(
-              (c) => (c.status = service.officialStatus)
-            );
+            if (service.components) {
+              service.components.forEach(
+                (c) => (c.status = service.officialStatus)
+              );
+            }
             if (
               service.id === "meu_inss" &&
               service.officialStatus !== "MAJOR_OUTAGE"
@@ -963,3 +1053,4 @@
     </script>
   </body>
 </html>
+
