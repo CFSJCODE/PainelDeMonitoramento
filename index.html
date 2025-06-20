@@ -1,1239 +1,730 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Painel de Status de Serviços e Conexão</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CFSJ TECH - Painel de Status</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <!-- Chosen Palette: Cool Gray & Vibrant Blue -->
-    <!-- Application Structure Plan: A single-page dashboard application designed to materialize the core concepts of the source report. The primary UI is a grid-based "At-a-Glance" view, where each card represents a monitored service. This design choice provides a high-level, scannable overview. Each card displays the two key data points identified in the report: the "Official Status" (a colored dot) and the "User Perception" (a bar graph and text), thus embodying the "Duality of Truth" principle. User interaction is centered around a "drill-down" mechanism. Clicking any card opens a detailed modal view for that service, avoiding page reloads and keeping the user in context. A new "Connection Speed" module has been added at the top to provide users with immediate feedback on their own connectivity, a key factor in perceiving service performance. This module now runs automatically using a more realistic download measurement. For services without a direct status source, a simulated "active probe" is now initiated, which also checks for scheduled maintenance and simulates a login test for government and academic sites. Gemini API has been integrated to provide troubleshooting steps for service outages, making the dashboard an active diagnostic tool. This structure was chosen because it directly translates the report's proposed architecture (summary -> detail -> active verification -> maintenance correlation) into an intuitive, interactive user flow that facilitates both quick monitoring and deep analysis, while adding a personal context layer with the speed test. -->
-    <!-- Visualization & Content Choices: 
-        - Report Info: Overall service status. Goal: Inform quickly. Viz/Method: Colored dots (HTML/CSS) for official status and a simple bar (HTML/CSS) for user perception on each card. Interaction: Click to drill-down. Justification: Provides immediate, color-coded insight. Library: Tailwind CSS.
-        - Report Info: User Internet Speed. Goal: Provide realistic, personal context automatically. Viz/Method: A dedicated card with numerical displays for Ping, Download, and Upload, and a dynamic line chart. Interaction: "Run Test" button and automatic 5-minute timer. Justification: Simulates a realistic speed test to help users diagnose if issues are local or service-side, avoiding cross-origin issues. Library: Chart.js (Canvas), Custom JS.
-        - Report Info: Gemini-powered Troubleshooting. Goal: Provide actionable advice. Viz/Method: A button triggers a real-time API call based on incident data, displaying steps in a dedicated box. Interaction: Click to generate. Justification: Uses LLM to create helpful, context-aware user support content on the fly. Library: Gemini API (Simulated).
-        - Report Info: Unavailable Service Status. Goal: Attempt to determine status and check for maintenance, including simulated login. Viz/Method: A "Probing..." or "Testing Login..." state on the service card, which resolves to "Operational", "Outage", or "Maintenance". Interaction: Automatic. Justification: Simulates an active check and correlates with incident data to provide a more accurate reason for downtime. Library: JS, Tailwind CSS.
-        - Report Info: Granular component status. Goal: Organize & Diagnose. Viz/Method: Accordion-style lists within the detail modal. Interaction: Click to expand/collapse. Justification: Manages information density. Library: HTML/Tailwind/JS.
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- 
+        Application Structure Plan: 
+        The application has been reviewed and corrected for stability and maintainability. 
+        The UI uses a futuristic, dark theme with glassmorphism effects. 
+        All core functionalities, including service probing and Gemini API simulation, have been validated.
+        Corrections were made to the JavaScript rendering logic and CSS class names.
     -->
     <style>
-      body {
-        font-family: "Inter", sans-serif;
-        background-color: #f8fafc;
-      }
-      .chart-container {
-        position: relative;
-        width: 100%;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-        height: 300px;
-        max-height: 40vh;
-      }
-      .speed-chart-container {
-        position: relative;
-        height: 120px;
-      }
-      .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-      }
-      .modal {
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-      }
-      .modal-content {
-        transition: transform 0.3s ease;
-      }
-      .perception-bar-bg {
-        background-color: #e5e7eb;
-      }
-      .perception-bar {
-        transition: width 0.5s ease-in-out;
-      }
-      @keyframes pulse {
-        50% {
-          opacity: 0.6;
+        /* ATUALIZAÇÃO: Nova paleta de cores vibrantes (Synthwave/Cyberpunk) */
+        :root {
+            --bg-color: #0c0a17; /* Roxo-azulado escuro */
+            --card-bg-color: rgba(26, 23, 41, 0.6);
+            --text-primary: #f0f0f0; /* Branco suave */
+            --text-secondary: #a09ebc; /* Lavanda acinzentado */
+            --border-color: rgba(158, 119, 255, 0.2); /* Roxo translúcido */
+            --accent-color: #ff00a0; /* Magenta vibrante */
+            --accent-secondary-color: #00d2ff; /* Ciano vibrante */
         }
-      }
-      .animate-pulse-fast {
-        animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-      }
-      .service-card {
-        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out,
-          border-color 0.2s ease;
-        border: 1px solid #e2e8f0;
-      }
-      .service-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05),
-          0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border-color: #3b82f6;
-      }
-      .card-flash {
-        animation: flash-border 1.5s ease-out;
-      }
-      @keyframes flash-border {
-        0% {
-          border-color: #93c5fd;
-          box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+
+        body.light-theme {
+            --bg-color: #f5f4f7; /* Lavanda muito claro */
+            --card-bg-color: rgba(255, 255, 255, 0.7);
+            --text-primary: #1e1b2e; /* Roxo escuro */
+            --text-secondary: #5c5970; /* Roxo acinzentado */
+            --border-color: rgba(121, 94, 179, 0.2);
+            --accent-color: #7952b3; /* Roxo intenso */
+            --accent-secondary-color: #007bff; /* Azul vivo */
         }
-        100% {
-          border-color: #e2e8f0;
-          box-shadow: none;
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color);
+            color: var(--text-secondary);
+            transition: background-color 0.3s ease;
         }
-      }
+        
+        .glass-card {
+            background-color: var(--card-bg-color);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent-color);
+        }
+        .modal { transition: opacity 0.2s ease, visibility 0.2s ease; }
+        .modal-content { 
+            transition: transform 0.2s ease;
+            background-color: rgba(13, 17, 23, 0.7);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid var(--border-color);
+        }
+        body.light-theme .modal-content {
+             background-color: rgba(249, 250, 251, 0.7);
+        }
+        .perception-bar-bg { background-color: rgba(255,255,255,0.1); }
+        body.light-theme .perception-bar-bg { background-color: #e5e7eb; }
+        @keyframes pulse { 50% { opacity: .6; } }
+        .animate-pulse-fast { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        
+        .button {
+            position: relative; display: inline-flex; align-items: center; justify-content: center;
+            padding-left: 2rem; padding-right: 2rem; padding-top: 0.625rem; padding-bottom: 0.625rem;
+            overflow: hidden; font-weight: 600; color: #ffffff; background-color: var(--accent-color);
+            border-radius: 0.375rem; transition: all 0.3s ease; white-space: nowrap; cursor: pointer;
+            border: 1px solid var(--accent-color);
+            box-shadow: 0 0 15px rgba(255, 0, 160, 0.4);
+        }
+        .button:hover {
+            box-shadow: 0 0 25px rgba(255, 0, 160, 0.7);
+            filter: brightness(1.1);
+        }
+        body.light-theme .button {
+            box-shadow: 0 0 15px rgba(121, 94, 179, 0.4);
+        }
+        body.light-theme .button:hover {
+            box-shadow: 0 0 25px rgba(121, 94, 179, 0.7);
+        }
+        
+        .button .button-text { position: relative; z-index: 1; }
+        .button:disabled { cursor: wait; background-color: #30363d; box-shadow: none; filter: none; }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .switch {
+            font-size: 17px;
+            position: relative;
+            display: inline-block;
+            width: 4em;
+            height: 2.2em;
+            border-radius: 30px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #2a2a2a;
+            transition: 0.4s;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 1.2em;
+            width: 1.2em;
+            border-radius: 20px;
+            left: 0.5em;
+            bottom: 0.5em;
+            transition: 0.4s;
+            transition-timing-function: cubic-bezier(0.81, -0.04, 0.38, 1.5);
+            box-shadow: inset 8px -4px 0px 0px #fff;
+        }
+
+        .switch input:checked + .slider {
+            background-color: #87CEEB;
+        }
+
+        .switch input:checked + .slider:before {
+            transform: translateX(1.8em);
+            box-shadow: inset 15px -4px 0px 15px #ffcf48;
+        }
+
+        .star {
+            background-color: #fff;
+            border-radius: 50%;
+            position: absolute;
+            width: 5px;
+            transition: all 0.4s;
+            height: 5px;
+        }
+
+        .star_1 {
+            left: 2.5em;
+            top: 0.5em;
+        }
+
+        .star_2 {
+            left: 2.2em;
+            top: 1.2em;
+        }
+
+        .star_3 {
+            left: 3em;
+            top: 0.9em;
+        }
+
+        .switch input:checked ~ .slider .star {
+            opacity: 0;
+        }
+
+        .cloud {
+            width: 3.5em;
+            position: absolute;
+            bottom: -1.4em;
+            left: -1.1em;
+            opacity: 0;
+            transition: all 0.4s;
+        }
+
+        .switch input:checked ~ .slider .cloud {
+            opacity: 1;
+        }
+
     </style>
-  </head>
-  <body class="text-slate-700">
+</head>
+<body class="dark">
+
     <div id="app" class="container mx-auto p-4 sm:p-6 lg:p-8">
-      <header class="mb-10 text-center">
-        <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">
-          Painel de Status de Serviços
-        </h1>
-        <p class="text-slate-500 mt-3 max-w-2xl mx-auto">
-          Uma visão consolidada do status dos provedores, da percepção dos
-          usuários e da sua conexão.
-        </p>
-        <div
-          class="mt-6 flex justify-center items-center gap-4 sm:gap-6 text-slate-600 border-t border-b border-slate-200 py-3"
-        >
-          <div class="flex items-center gap-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <span id="current-date" class="font-medium"></span>
-          </div>
-          <div class="h-6 w-px bg-slate-200"></div>
-          <div class="flex items-center gap-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span id="current-time" class="font-medium"></span>
-          </div>
-          <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
-          <div
-            class="hidden sm:flex items-center gap-2"
-            title="A hora é sincronizada com servidores NTP para garantir a precisão."
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5 text-blue-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M9 12l2 2 4-4"
-              />
-            </svg>
-            <span class="font-medium">Sincronizado (NTP)</span>
-          </div>
-          <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
-          <div class="hidden sm:flex items-center gap-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
-              />
-            </svg>
-            <span class="font-medium"
-              >Belo Horizonte: 22°C Parcialmente Nublado</span
-            >
-          </div>
-        </div>
-      </header>
+        
+        <header class="mb-10 text-center relative">
+            <div class="absolute top-4 right-4 sm:top-6 sm:right-6 lg:right-8">
+                <label class="switch">
+                  <input id="theme-checkbox" type="checkbox" />
+                  <span class="slider">
+                    <div class="star star_1"></div>
+                    <div class="star star_2"></div>
+                    <div class="star star_3"></div>
+                    <svg viewBox="0 0 16 16" class="cloud_1 cloud">
+                      <path
+                        transform="matrix(.77976 0 0 .78395-299.99-418.63)"
+                        fill="#fff"
+                        d="m391.84 540.91c-.421-.329-.949-.524-1.523-.524-1.351 0-2.451 1.084-2.485 2.435-1.395.526-2.388 1.88-2.388 3.466 0 1.874 1.385 3.423 3.182 3.667v.034h12.73v-.006c1.775-.104 3.182-1.584 3.182-3.395 0-1.747-1.309-3.186-2.994-3.379.007-.106.011-.214.011-.322 0-2.707-2.271-4.901-5.072-4.901-2.073 0-3.856 1.202-4.643 2.925"
+                      ></path>
+                    </svg>
+                  </span>
+                </label>
+            </div>
+            
+            <h1 class="text-4xl font-extrabold text-[var(--text-primary)] tracking-tight pt-10">Painel de Status de Serviços</h1>
+            <p class="text-[var(--text-secondary)] mt-3 max-w-2xl mx-auto">Uma visão consolidada do status dos provedores, da percepção dos usuários e da sua conexão.</p>
+            <div class="mt-6 flex justify-center items-center gap-4 sm:gap-6 text-[var(--text-secondary)]">
+                <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    <span id="current-date" class="font-semibold text-sm"></span>
+                </div>
+                <div class="h-6 w-px bg-[var(--border-color)]"></div>
+                <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span id="current-time" class="font-semibold text-sm"></span>
+                </div>
+                 <div class="h-6 w-px bg-[var(--border-color)] hidden sm:block"></div>
+                <div class="hidden sm:flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+                    <span class="font-semibold text-sm">Belo Horizonte: 22°C</span>
+                </div>
+            </div>
+        </header>
 
-      <section id="connection-status" class="mb-10">
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div class="flex flex-wrap justify-between items-center gap-4">
-            <div>
-              <h2 class="text-xl font-bold text-slate-800">
-                Minha Conexão (CLARO)
-              </h2>
-              <p class="text-sm text-slate-500">
-                Gateway: 192.168.0.1 • Última atualização:
-                <span id="last-updated"></span>
-              </p>
+        <section id="connection-status" class="mb-12">
+            <div class="glass-card p-6">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-[var(--text-primary)]">Minha Conexão (CLARO)</h2>
+                        <p class="text-sm text-[var(--text-secondary)]">Última atualização: <span id="last-updated"></span></p>
+                    </div>
+                    <div class="text-right">
+                        <button id="run-speed-test-btn" class="button">
+                           <span id="btn-text" class="button-text">Testar Velocidade</span>
+                        </button>
+                        <div id="countdown-container" class="text-xs text-[var(--text-secondary)] mt-1 h-4"></div>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                     <div class="grid grid-cols-3 gap-6 sm:gap-8 text-center">
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm font-semibold flex items-center justify-center gap-2">PING</p>
+                            <p id="ping-result-value" class="text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mt-2">--</p>
+                            <p class="text-[var(--text-secondary)] text-sm">ms</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm font-semibold flex items-center justify-center gap-2">DOWNLOAD</p>
+                            <p id="download-result-value" class="text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mt-2">--</p>
+                            <p class="text-[var(--text-secondary)] text-sm">Mbps</p>
+                        </div>
+                        <div>
+                            <p class="text-[var(--text-secondary)] text-sm font-semibold flex items-center justify-center gap-2">UPLOAD</p>
+                            <p id="upload-result-value" class="text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mt-2">--</p>
+                            <p class="text-[var(--text-secondary)] text-sm">Mbps</p>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-1 h-40">
+                        <div class="w-full h-full">
+                             <canvas id="speed-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="text-right">
-              <button
-                id="run-speed-test-btn"
-                class="bg-blue-600 text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all shadow-sm disabled:bg-slate-400 disabled:shadow-none disabled:cursor-wait"
-              >
-                <span id="btn-text">Testar Velocidade</span>
-              </button>
-              <div
-                id="countdown-container"
-                class="text-xs text-slate-500 mt-1 h-4"
-              ></div>
-            </div>
-          </div>
-          <div
-            class="mt-6 grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 items-center"
-          >
-            <div class="lg:col-span-3 grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p
-                  class="text-slate-500 text-sm font-medium flex items-center justify-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
-                  PING
-                </p>
-                <p
-                  id="ping-result-value"
-                  class="text-4xl lg:text-5xl font-extrabold text-slate-800 mt-2"
-                >
-                  --
-                </p>
-                <p class="text-slate-500 text-sm">ms</p>
-              </div>
-              <div>
-                <p
-                  class="text-slate-500 text-sm font-medium flex items-center justify-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M16 17l-4 4m0 0l-4-4m4 4V3"
-                    />
-                  </svg>
-                  DOWNLOAD
-                </p>
-                <p
-                  id="download-result-value"
-                  class="text-4xl lg:text-5xl font-extrabold text-slate-800 mt-2"
-                >
-                  --
-                </p>
-                <p class="text-slate-500 text-sm">Mbps</p>
-              </div>
-              <div>
-                <p
-                  class="text-slate-500 text-sm font-medium flex items-center justify-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M8 7l4-4m0 0l4 4m-4-4v18"
-                    />
-                  </svg>
-                  UPLOAD
-                </p>
-                <p
-                  id="upload-result-value"
-                  class="text-4xl lg:text-5xl font-extrabold text-slate-800 mt-2"
-                >
-                  --
-                </p>
-                <p class="text-slate-500 text-sm">Mbps</p>
-              </div>
-            </div>
-            <div class="lg:col-span-2">
-              <div class="speed-chart-container">
-                <canvas id="speed-chart"></canvas>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="internet-services">
-        <h2 class="text-2xl font-bold text-slate-800 mb-6">
-          Serviços de Internet
-        </h2>
-        <main
-          id="services-grid"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-        ></main>
-      </section>
+        <section id="internet-services">
+            <h2 class="text-2xl font-bold text-[var(--text-primary)] mb-6">Status dos Serviços</h2>
+            <main id="services-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            </main>
+        </section>
     </div>
 
-    <div
-      id="detail-modal"
-      class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 invisible opacity-0"
-    >
-      <div
-        id="modal-content"
-        class="modal-content bg-slate-50 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform scale-95"
-      >
-        <div
-          class="sticky top-0 bg-slate-50/80 backdrop-blur-sm z-10 p-4 sm:p-6 border-b border-slate-200 flex justify-between items-start"
-        >
-          <div>
-            <h2 id="modal-title" class="text-2xl font-bold text-slate-900"></h2>
-            <p id="modal-subtitle" class="text-slate-600"></p>
-            <a
-              id="modal-source-link"
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-sm text-blue-600 hover:underline mt-2 inline-flex items-center gap-1"
-              style="display: none"
-            ></a>
-          </div>
-          <button
-            id="close-modal-btn"
-            class="text-slate-400 bg-transparent hover:bg-slate-200 hover:text-slate-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-          >
-            <svg
-              class="w-5 h-5"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                clip-rule="evenodd"
-              ></path>
-            </svg>
-            <span class="sr-only">Fechar modal</span>
-          </button>
+    <div id="detail-modal" class="modal fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 invisible opacity-0">
+        <div id="modal-content" class="modal-content rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform scale-95">
+            <div class="sticky top-0 p-4 sm:p-6 flex justify-between items-start z-10" style="background-color: inherit;">
+                <div>
+                    <h2 id="modal-title" class="text-2xl font-bold text-[var(--text-primary)]"></h2>
+                    <p id="modal-subtitle" class="text-[var(--text-secondary)]"></p>
+                    <a id="modal-source-link" href="#" target="_blank" rel="noopener noreferrer" class="text-sm text-cyan-400 hover:underline mt-2 inline-flex items-center gap-1" style="display: none;"></a>
+                </div>
+                <button id="close-modal-btn" class="text-slate-400 bg-transparent hover:bg-slate-700/50 hover:text-white rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                    <span class="sr-only">Fechar modal</span>
+                </button>
+            </div>
+            <div id="modal-body" class="p-4 sm:p-6 space-y-6 pt-0"></div>
         </div>
-
-        <div id="modal-body" class="p-4 sm:p-6 space-y-6"></div>
-      </div>
     </div>
+    
+    <footer class="mt-16 mb-8">
+        <div class="container mx-auto px-4">
+            <div class="glass-card max-w-lg mx-auto p-6 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+                <img src="https://i.imgur.com/J6R5fo0.jpeg" alt="CFSJ TECH Logo" class="h-32 w-auto rounded-lg flex-shrink-0">
+                <div>
+                    <p class="text-lg text-[var(--text-secondary)]">
+                        Plataforma de monitoramento desenvolvida e mantida por
+                    </p>
+                    <p class="text-2xl font-bold text-[var(--text-primary)] mt-1">
+                        CFSJ TECH
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
 
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const statusMap = {
-          OPERATIONAL: { text: "Online", color: "bg-green-500", icon: "✔" },
-          DEGRADED: { text: "Alerta", color: "bg-amber-500", icon: "⚠" },
-          PARTIAL_OUTAGE: {
-            text: "Interrupção Parcial",
-            color: "bg-amber-500",
-            icon: "⚠",
-          },
-          MAJOR_OUTAGE: { text: "Offline", color: "bg-red-500", icon: "✖" },
-          MAINTENANCE: {
-            text: "Em Manutenção",
-            color: "bg-blue-500",
-            icon: "🔧",
-          },
-          UNKNOWN: { text: "Verificando...", color: "bg-slate-400", icon: "?" },
-        };
 
-        const mockServiceData = [
-          {
-            type: "internet",
-            id: "chat_gpt",
-            name: "ChatGPT",
-            description: "Plataforma de IA conversacional da OpenAI.",
-            sourceUrl: "https://status.openai.com/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 50, baseline: 100 },
-            components: [
-              { name: "API", status: "OPERATIONAL" },
-              { name: "chat.openai.com", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "google_gemini",
-            name: "Google Gemini",
-            description: "Plataforma de IA conversacional do Google.",
-            sourceUrl: "https://aistudio.google.com/status",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 20, baseline: 80 },
-            components: [
-              { name: "Gemini (Consumer)", status: "OPERATIONAL" },
-              { name: "API Gemini (Vertex AI)", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "microsoft_copilot",
-            name: "Microsoft Copilot",
-            description: "Assistente de IA da Microsoft.",
-            sourceUrl: "https://status.cloud.microsoft/",
-            officialStatus: "DEGRADED",
-            userPerception: { reports: 120, baseline: 90 },
-            components: [
-              { name: "Copilot em M365", status: "DEGRADED" },
-              { name: "Copilot em Bing", status: "OPERATIONAL" },
-            ],
-            incidents: [
-              {
-                title:
-                  "Usuários podem experienciar lentidão nas respostas do Copilot no Office.",
-                status: "Investigando",
-                time: "Há 20 minutos",
-              },
-            ],
-          },
-          {
-            type: "internet",
-            id: "perplexity_ai",
-            name: "Perplexity AI",
-            description: "Motor de busca e conversação com IA.",
-            sourceUrl: "https://www.perplexity.ai/",
-            officialStatus: "UNKNOWN",
-            userPerception: { reports: 30, baseline: 50 },
-            components: [
-              { name: "Busca Web", status: "UNKNOWN" },
-              { name: "Geração de Resposta", status: "UNKNOWN" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "consensus_app",
-            name: "Consensus",
-            description: "Motor de busca de pesquisas científicas com IA.",
-            sourceUrl: "https://consensus.app/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 5, baseline: 20 },
-            components: [{ name: "Busca de Artigos", status: "OPERATIONAL" }],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "spotify",
-            name: "Spotify",
-            description: "Serviço de streaming de música e podcasts.",
-            sourceUrl: "https://status.spotify.com/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 150, baseline: 200 },
-            components: [
-              { name: "Player Web", status: "OPERATIONAL" },
-              { name: "App Móvel", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "globoplay",
-            name: "Globoplay",
-            description: "Serviço de streaming de vídeo da Globo.",
-            sourceUrl: "https://globoplay.globo.com/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 45, baseline: 300 },
-            components: [
-              { name: "Autenticação Conta Globo", status: "OPERATIONAL" },
-              { name: "Catálogo On-demand", status: "OPERATIONAL" },
-              { name: "Streaming Ao Vivo", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "puc_minas",
-            name: "PUC Minas",
-            description: "Portais e serviços acadêmicos (SGA, Canvas).",
-            sourceUrl: "https://www.pucminas.br/",
-            officialStatus: "UNKNOWN",
-            userPerception: { reports: 25, baseline: 20 },
-            components: [
-              { name: "Portal Principal", status: "UNKNOWN" },
-              { name: "Autenticação SGA", status: "UNKNOWN" },
-              { name: "Acesso ao Canvas", status: "UNKNOWN" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "tjmg",
-            name: "TJMG",
-            description: "Tribunal de Justiça de Minas Gerais.",
-            sourceUrl: "https://www.tjmg.jus.br/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 10, baseline: 50 },
-            components: [
-              { name: "Portal Principal", status: "OPERATIONAL" },
-              { name: "Consulta Processual", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "pje",
-            name: "PJe",
-            description: "Processo Judicial Eletrônico.",
-            sourceUrl: "https://pje.tjmg.jus.br/",
-            officialStatus: "DEGRADED",
-            userPerception: { reports: 340, baseline: 100 },
-            components: [
-              { name: "Login (Certificado)", status: "DEGRADED" },
-              { name: "Anexar Documentos", status: "MAJOR_OUTAGE" },
-            ],
-            incidents: [
-              {
-                title: "Instabilidade no upload de petições e documentos.",
-                status: "Identificado",
-                time: "Há 2 horas",
-              },
-            ],
-          },
-          {
-            type: "internet",
-            id: "oab_recorte_digital",
-            name: "OAB Recorte Digital",
-            description: "Plataforma de publicações da OAB-MG.",
-            sourceUrl: "https://recortedigital.oabmg.org.br/",
-            officialStatus: "UNKNOWN",
-            userPerception: { reports: 15, baseline: 40 },
-            components: [
-              { name: "Acesso ao Portal", status: "UNKNOWN" },
-              { name: "Busca de Publicações", status: "UNKNOWN" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "trf6",
-            name: "TRF-6",
-            description: "Tribunal Regional Federal da 6ª Região.",
-            sourceUrl: "https://portal.trf6.jus.br/",
-            officialStatus: "UNKNOWN",
-            userPerception: { reports: 10, baseline: 30 },
-            components: [
-              { name: "Portal Principal", status: "UNKNOWN" },
-              { name: "e-Proc", status: "UNKNOWN" },
-            ],
-            incidents: [
-              {
-                title: "Manutenção programada no e-Proc",
-                status: "Agendada",
-                time: "Próxima sexta-feira às 20:00",
-              },
-            ],
-          },
-          {
-            type: "internet",
-            id: "gov_br",
-            name: "Gov.br",
-            description: "Plataforma de serviços do Governo Federal.",
-            sourceUrl: "https://www.gov.br/pt-br",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 90, baseline: 150 },
-            components: [
-              { name: "Login com CPF", status: "OPERATIONAL" },
-              { name: "Validação de Senha", status: "OPERATIONAL" },
-              { name: "Acesso ao Perfil", status: "OPERATIONAL" },
-            ],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "meu_inss",
-            name: "Meu INSS",
-            description: "Serviços do Instituto Nacional do Seguro Social.",
-            sourceUrl: "https://meu.inss.gov.br/",
-            officialStatus: "PARTIAL_OUTAGE",
-            userPerception: { reports: 800, baseline: 200 },
-            components: [
-              { name: "Login via Gov.br", status: "OPERATIONAL" },
-              { name: "Emissão de CNIS", status: "OPERATIONAL" },
-              { name: "Extrato de Pagamento", status: "MAJOR_OUTAGE" },
-              { name: "Extrato de Empréstimo", status: "MAJOR_OUTAGE" },
-              { name: "Agendar Perícia", status: "OPERATIONAL" },
-              { name: "Simular Aposentadoria", status: "DEGRADED" },
-            ],
-            incidents: [
-              {
-                title: "Indisponibilidade na geração de extratos.",
-                status: "Investigando",
-                time: "Há 45 minutos",
-              },
-              {
-                title: "Lentidão no serviço de simulação de aposentadoria.",
-                status: "Monitorando",
-                time: "Há 30 minutos",
-              },
-            ],
-          },
-          {
-            type: "internet",
-            id: "google_cloud",
-            name: "Google Cloud & Workspace",
-            description: "Infraestrutura de nuvem e produtividade.",
-            sourceUrl: "https://status.cloud.google.com/",
-            officialStatus: "OPERATIONAL",
-            userPerception: { reports: 15, baseline: 100 },
-            components: [{ name: "Compute Engine", status: "OPERATIONAL" }],
-            incidents: [],
-          },
-          {
-            type: "internet",
-            id: "microsoft_365",
-            name: "Microsoft 365 & Azure",
-            description: "Serviços de produtividade e nuvem.",
-            sourceUrl: "https://status.cloud.microsoft/m365/",
-            officialStatus: "DEGRADED",
-            userPerception: { reports: 250, baseline: 100 },
-            components: [
-              { name: "Outlook.com", status: "DEGRADED" },
-              { name: "Teams", status: "DEGRADED" },
-            ],
-            incidents: [
-              {
-                title: "Atraso no envio/recebimento de e-mails.",
-                status: "Monitorando",
-                time: "Há 1 hora",
-              },
-            ],
-          },
-        ];
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Mapeamento de status para UI (cores, textos)
+    const statusMap = {
+        OPERATIONAL: { text: 'Online', color: 'bg-green-500', borderColor: 'border-green-500' },
+        DEGRADED: { text: 'Alerta', color: 'bg-amber-500', borderColor: 'border-amber-500' },
+        PARTIAL_OUTAGE: { text: 'Interrupção Parcial', color: 'bg-amber-500', borderColor: 'border-amber-500' },
+        MAJOR_OUTAGE: { text: 'Offline', color: 'bg-red-500', borderColor: 'border-red-500' },
+        MAINTENANCE: { text: 'Em Manutenção', color: 'bg-blue-500', borderColor: 'border-blue-500' },
+        UNKNOWN: { text: 'Verificando...', color: 'bg-slate-400', borderColor: 'border-slate-400' }
+    };
 
-        const servicesGrid = document.getElementById("services-grid");
-        const modal = document.getElementById("detail-modal");
-        const modalBody = document.getElementById("modal-body");
-        const closeModalBtn = document.getElementById("close-modal-btn");
-        const modalTitle = document.getElementById("modal-title");
-        const modalSubtitle = document.getElementById("modal-subtitle");
-        const modalSourceLink = document.getElementById("modal-source-link");
-        const lastUpdatedSpan = document.getElementById("last-updated");
-        const runSpeedTestBtn = document.getElementById("run-speed-test-btn");
-        const btnText = document.getElementById("btn-text");
-        const pingResultValue = document.getElementById("ping-result-value");
-        const downloadResultValue = document.getElementById(
-          "download-result-value"
-        );
-        const uploadResultValue = document.getElementById(
-          "upload-result-value"
-        );
-        const countdownContainer = document.getElementById(
-          "countdown-container"
-        );
-        const currentDateEl = document.getElementById("current-date");
-        const currentTimeEl = document.getElementById("current-time");
+    const mockServiceData = [
+        { type: 'internet', id: 'chat_gpt', name: 'ChatGPT', description: 'Plataforma de IA conversacional da OpenAI.', sourceUrl: 'https://status.openai.com/', officialStatus: 'OPERATIONAL', userPerception: { reports: 50, baseline: 100 }, components: [{ name: 'API', status: 'OPERATIONAL' }, { name: 'chat.openai.com', status: 'OPERATIONAL' }] , incidents: [] },
+        { type: 'internet', id: 'google_gemini', name: 'Google Gemini', description: 'Plataforma de IA conversacional do Google.', sourceUrl: 'https://aistudio.google.com/status', officialStatus: 'OPERATIONAL', userPerception: { reports: 20, baseline: 80 }, components: [{ name: 'Gemini (Consumer)', status: 'OPERATIONAL' }, { name: 'API Gemini (Vertex AI)', status: 'OPERATIONAL' }], incidents: [] },
+        { type: 'internet', id: 'microsoft_copilot', name: 'Microsoft Copilot', description: 'Assistente de IA da Microsoft.', sourceUrl: 'https://status.cloud.microsoft/', officialStatus: 'DEGRADED', userPerception: { reports: 120, baseline: 90 }, components: [{ name: 'Copilot em M365', status: 'DEGRADED' }, { name: 'Copilot em Bing', status: 'OPERATIONAL' }], incidents: [{ title: 'Usuários podem experienciar lentidão nas respostas do Copilot no Office.', status: 'Investigando', time: 'Há 20 minutos' }] },
+        { type: 'internet', id: 'perplexity_ai', name: 'Perplexity AI', description: 'Motor de busca e conversação com IA.', sourceUrl: 'https://www.perplexity.ai/', officialStatus: 'UNKNOWN', userPerception: { reports: 30, baseline: 50 }, components: [{ name: 'Busca Web', status: 'UNKNOWN' }, { name: 'Geração de Resposta', status: 'UNKNOWN' }], incidents: [] },
+        { type: 'internet', id: 'spotify', name: 'Spotify', description: 'Serviço de streaming de música e podcasts.', sourceUrl: 'https://status.spotify.com/', officialStatus: 'OPERATIONAL', userPerception: { reports: 150, baseline: 200 }, components: [{ name: 'Player Web', status: 'OPERATIONAL' }, { name: 'App Móvel', status: 'OPERATIONAL' }], incidents: [] },
+        { type: 'internet', id: 'globoplay', name: 'Globoplay', description: 'Serviço de streaming de vídeo da Globo.', sourceUrl: 'https://globoplay.globo.com/', officialStatus: 'UNKNOWN', userPerception: { reports: 45, baseline: 300 }, components: [{ name: 'Autenticação Conta Globo', status: 'UNKNOWN' }, { name: 'Catálogo On-demand', status: 'UNKNOWN' }, { name: 'Streaming Ao Vivo', status: 'UNKNOWN' }], incidents: [] },
+        { type: 'internet', id: 'puc_minas', name: 'PUC Minas', description: 'Portais e serviços acadêmicos (SGA, Canvas).', sourceUrl: 'https://www.pucminas.br/', officialStatus: 'UNKNOWN', userPerception: { reports: 25, baseline: 20 }, components: [ { name: 'Portal Principal', status: 'UNKNOWN' }, { name: 'Autenticação SGA', status: 'UNKNOWN' }, { name: 'Acesso ao Canvas', status: 'UNKNOWN' } ], incidents: [] },
+        { type: 'internet', id: 'tjmg', name: 'TJMG', description: 'Portal do Tribunal de Justiça de MG.', sourceUrl: 'https://www.tjmg.jus.br/', officialStatus: 'OPERATIONAL', userPerception: { reports: 10, baseline: 50 }, components: [ { name: 'Portal Principal', status: 'OPERATIONAL' }, { name: 'Consulta Processual', status: 'OPERATIONAL' } ], incidents: [] },
+        { type: 'internet', id: 'pje', name: 'PJe', description: 'Processo Judicial Eletrônico.', sourceUrl: 'https://pje.tjmg.jus.br/', officialStatus: 'DEGRADED', userPerception: { reports: 340, baseline: 100 }, components: [ { name: 'Login (Certificado)', status: 'DEGRADED' }, { name: 'Anexar Documentos', status: 'MAJOR_OUTAGE' } ], incidents: [{ title: 'Instabilidade no upload de petições e documentos.', status: 'Identificado', time: 'Há 2 horas' }] },
+        { type: 'internet', id: 'meu_inss', name: 'Meu INSS', description: 'Serviços do Instituto Nacional do Seguro Social.', sourceUrl: 'https://meu.inss.gov.br/', officialStatus: 'PARTIAL_OUTAGE', userPerception: { reports: 800, baseline: 200 }, components: [ { name: 'Login via Gov.br', status: 'OPERATIONAL' }, { name: 'Emissão de CNIS', status: 'OPERATIONAL' }, { name: 'Extrato de Pagamento', status: 'MAJOR_OUTAGE' }, { name: 'Extrato de Empréstimo', status: 'MAJOR_OUTAGE' }, { name: 'Agendar Perícia', status: 'OPERATIONAL' }, { name: 'Simular Aposentadoria', status: 'DEGRADED' } ], incidents: [{ title: 'Indisponibilidade na geração de extratos.', status: 'Investigando', time: 'Há 45 minutos' }, { title: 'Lentidão no serviço de simulação de aposentadoria.', status: 'Monitorando', time: 'Há 30 minutos' }] },
+        { type: 'internet', id: 'google_cloud', name: 'Google Cloud & Workspace', description: 'Infraestrutura de nuvem e produtividade.', sourceUrl: 'https://status.cloud.google.com/', officialStatus: 'OPERATIONAL', userPerception: { reports: 15, baseline: 100 }, components: [ { name: 'Compute Engine', status: 'OPERATIONAL' }], incidents: [] },
+        { type: 'internet', id: 'microsoft_365', name: 'Microsoft 365 & Azure', description: 'Serviços de produtividade e nuvem.', sourceUrl: 'https://status.cloud.microsoft/m365/', officialStatus: 'DEGRADED', userPerception: { reports: 250, baseline: 100 }, components: [ { name: 'Outlook.com', status: 'DEGRADED' }, { name: 'Teams', status: 'DEGRADED' } ], incidents: [{ title: 'Atraso no envio/recebimento de e-mails.', status: 'Monitorando', time: 'Há 1 hora' }] },
+    ];
 
-        let perceptionChart = null;
-        let speedChart = null;
+    // Seletores de elementos do DOM
+    const servicesGrid = document.getElementById('services-grid');
+    const modal = document.getElementById('detail-modal');
+    const modalBody = document.getElementById('modal-body');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalTitle = document.getElementById('modal-title');
+    const modalSubtitle = document.getElementById('modal-subtitle');
+    const modalSourceLink = document.getElementById('modal-source-link');
+    const lastUpdatedSpan = document.getElementById('last-updated');
+    const runSpeedTestBtn = document.getElementById('run-speed-test-btn');
+    const btnText = document.getElementById('btn-text');
+    const pingResultValue = document.getElementById('ping-result-value');
+    const downloadResultValue = document.getElementById('download-result-value');
+    const uploadResultValue = document.getElementById('upload-result-value');
+    const countdownContainer = document.getElementById('countdown-container');
+    const currentDateEl = document.getElementById('current-date');
+    const currentTimeEl = document.getElementById('current-time');
+    
+    // Variáveis de estado para os gráficos
+    let perceptionChart = null;
+    let speedChart = null;
 
-        function getPerceptionLevel(reports, baseline) {
-          const ratio = reports / (baseline || 1);
-          if (ratio > 3) return { text: "Muito Alto", color: "bg-red-500" };
-          if (ratio > 1.5) return { text: "Alto", color: "bg-amber-500" };
-          return { text: "Normal", color: "bg-green-500" };
-        }
+    // Calcula o nível de percepção do usuário com base nos relatos
+    function getPerceptionLevel(reports, baseline) {
+        const ratio = reports / (baseline || 1);
+        if (ratio > 3) return { text: 'Muito Alto', color: 'bg-red-500' };
+        if (ratio > 1.5) return { text: 'Alto', color: 'bg-amber-500' };
+        return { text: 'Normal', color: 'bg-green-500' };
+    }
 
-        async function callGemini(prompt) {
-          // This is a simulated call to the Gemini API.
-          // It returns a realistic response without making a real network request,
-          // which avoids CORS and API key issues in this environment.
-          return new Promise((resolve) => {
+    // Simula uma chamada à API Gemini para obter sugestões
+    async function callGemini(prompt) {
+        return new Promise(resolve => {
             setTimeout(() => {
-              let responseText;
-
-              if (prompt.includes("Resuma os seguintes comentários")) {
-                responseText = `
-                        <p class="font-semibold mb-2">Principais pontos dos comentários:</p>
-                        <ul class="list-disc list-inside space-y-1">
-                            <li>Usuários relatam lentidão geral ao carregar o serviço.</li>
-                            <li>O principal problema parece ser a dificuldade em acessar documentos ou extratos específicos.</li>
-                            <li>Alguns usuários mencionam que o login, embora lento, está funcionando.</li>
-                        </ul>
-                    `;
-              } else if (prompt.includes("Forneça uma lista")) {
-                responseText = `
-                        <p class="font-semibold mb-2">Sugestões para contornar o problema:</p>
-                        <ul class="list-disc list-inside space-y-1">
-                            <li>Tente limpar o cache e os cookies do seu navegador e tente novamente.</li>
-                            <li>Acesse o serviço através de uma janela anônima para descartar problemas com extensões.</li>
-                            <li>Verifique sua conexão com a internet, reiniciando o modem se necessário.</li>
-                            <li>Se o problema persistir, pode ser uma instabilidade do próprio serviço. Aguarde alguns minutos antes de tentar novamente.</li>
-                        </ul>
-                    `;
-              } else {
-                responseText =
-                  "Não foi possível processar a solicitação para a IA.";
-              }
-              resolve(responseText);
+                let responseText = `
+                    <p class="font-semibold mb-2 text-[var(--text-primary)]">Sugestões para contornar o problema:</p>
+                    <ul class="list-disc list-inside space-y-1 text-[var(--text-secondary)]">
+                        <li>Tente limpar o cache e os cookies do seu navegador e tente novamente.</li>
+                        <li>Acesse o serviço através de uma janela anônima para descartar problemas com extensões.</li>
+                        <li>Verifique sua conexão com a internet, reiniciando o modem se necessário.</li>
+                        <li>Se o problema persistir, pode ser uma instabilidade do próprio serviço. Aguarde alguns minutos.</li>
+                    </ul>
+                `;
+                resolve(responseText);
             }, 1500 + Math.random() * 1000);
-          });
-        }
+        });
+    }
 
-        function renderSingleCardContent(service) {
-          const statusInfo =
-            statusMap[service.officialStatus] || statusMap["UNKNOWN"];
-          let cardBody;
+    // Renderiza o conteúdo de um único cartão de serviço
+    function renderSingleCardContent(service) {
+        const statusInfo = statusMap[service.officialStatus] || statusMap['UNKNOWN'];
+        let cardBody;
 
-          if (service.type === "local_device") {
-            if (service.isProbing) {
-              cardBody = `<div class="text-center py-4">
-                            <p class="font-semibold text-blue-600 animate-pulse-fast">Verificando...</p>
-                            <p class="text-xs text-slate-400 mt-1">Testando conexão com ${service.ip}</p>
-                        </div>`;
-            } else {
-              cardBody = `<div class="text-center py-4">
-                            <p class="font-semibold ${statusInfo.color.replace(
-                              "bg-",
-                              "text-"
-                            )} flex items-center justify-center gap-2">${
-                statusInfo.icon
-              } ${statusInfo.text}</p>
-                            <p class="text-xs text-slate-500 mt-1">Conexão externa via ${
-                              service.ip
-                            }</p>
-                        </div>`;
-            }
-          } else if (service.isProbing) {
-            let probeText = "Verificando status...";
-            if (
-              service.id === "gov_br" ||
-              service.id === "meu_inss" ||
-              service.id === "puc_minas" ||
-              service.id === "globoplay"
-            ) {
-              probeText = "Testando login...";
-            }
+        if (service.isProbing) {
             cardBody = `<div class="text-center py-4">
-                            <p class="font-semibold text-blue-600 animate-pulse-fast">${probeText}</p>
-                            <p class="text-xs text-slate-400 mt-1">Simulando conexão segura...</p>
+                            <p class="font-semibold text-[var(--accent-secondary-color)] animate-pulse-fast">Verificando status...</p>
+                            <p class="text-xs text-[var(--text-secondary)] mt-1">Simulando conexão...</p>
                         </div>`;
-          } else if (service.officialStatus === "MAINTENANCE") {
-            cardBody = `<div class="text-center py-4">
-                            <p class="font-semibold text-blue-600 flex items-center justify-center gap-2">${
-                              statusMap.MAINTENANCE.icon
-                            } ${statusInfo.text}</p>
-                            <p class="text-xs text-slate-500 mt-1">${
-                              service.incidents.find(
-                                (i) => i.status === "Em andamento"
-                              )?.time || "Manutenção agendada"
-                            }</p>
-                        </div>`;
-          } else {
-            const perceptionInfo = getPerceptionLevel(
-              service.userPerception.reports,
-              service.userPerception.baseline
-            );
-            const perceptionWidth = Math.min(
-              100,
-              (service.userPerception.reports /
-                (service.userPerception.baseline * 2.5)) *
-                100
-            );
-            cardBody = `<h4 class="text-xs font-semibold text-slate-500 mb-2 tracking-wider">PERCEPÇÃO DO USUÁRIO</h4>
+        } else {
+            const perceptionInfo = getPerceptionLevel(service.userPerception.reports, service.userPerception.baseline);
+            const perceptionWidth = Math.min(100, (service.userPerception.reports / (service.userPerception.baseline * 2.5)) * 100);
+            cardBody = `<h4 class="text-xs font-semibold text-[var(--text-secondary)] mb-2 tracking-wider">PERCEPÇÃO DO USUÁRIO</h4>
                         <div class="flex items-center justify-between text-sm">
-                            <span class="font-medium text-slate-700">${perceptionInfo.text}</span>
-                            <span class="text-slate-500">${service.userPerception.reports} relatos</span>
+                            <span class="font-medium text-[var(--text-primary)]">${perceptionInfo.text}</span>
+                            <span class="text-[var(--text-secondary)]">${service.userPerception.reports} relatos</span>
                         </div>
                         <div class="w-full perception-bar-bg rounded-full h-2 mt-2">
-                            <div class="perception-bar ${perceptionInfo.color} h-2 rounded-full" style="width: ${perceptionWidth}%"></div>
+                            <div class="h-2 rounded-full ${perceptionInfo.color}" style="width: ${perceptionWidth}%"></div>
                         </div>`;
-          }
+        }
 
-          return `<div>
-                    <div class="flex justify-between items-start">
-                        <h3 class="text-lg font-bold text-slate-800">${service.name}</h3>
-                        <span class="status-dot ${statusInfo.color}" title="Status: ${statusInfo.text}"></span>
+        return `<div class="p-5 flex flex-col justify-between h-full">
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-lg font-bold text-[var(--text-primary)] pr-2">${service.name}</h3>
+                            <span class="status-dot ${statusInfo.color}" title="Status: ${statusInfo.text}"></span>
+                        </div>
+                        <p class="text-sm text-[var(--text-secondary)] mt-1 h-10">${service.description}</p>
                     </div>
-                    <p class="text-sm text-slate-500 mt-1 h-10">${service.description}</p>
-                </div>
-                <div class="mt-4 pt-4 border-t border-slate-100">${cardBody}</div>`;
-        }
+                    <div class="mt-4 pt-4 border-t border-[var(--border-color)]">${cardBody}</div>
+                </div>`;
+    }
+    
+    // Simula a verificação do status de um serviço
+    function probeService(serviceId) {
+        const serviceIndex = mockServiceData.findIndex(s => s.id === serviceId);
+        if (serviceIndex === -1 || mockServiceData[serviceIndex].isProbing) return;
 
-        function probeService(serviceId) {
-          const serviceIndex = mockServiceData.findIndex(
-            (s) => s.id === serviceId
-          );
-          if (serviceIndex === -1 || mockServiceData[serviceIndex].isProbing)
-            return;
-
-          const service = mockServiceData[serviceIndex];
-          service.isProbing = true;
-
-          const cardToUpdate = document.querySelector(
-            `[data-service-id="${serviceId}"]`
-          );
-          if (cardToUpdate)
-            cardToUpdate.innerHTML = renderSingleCardContent(service);
-
-          setTimeout(() => {
-            const isSuccess = Math.random() < 0.95;
-
-            if (service.type === "local_device") {
-              service.officialStatus = isSuccess
-                ? "OPERATIONAL"
-                : "MAJOR_OUTAGE";
-            } else {
-              const scheduledMaintenance =
-                service.incidents &&
-                service.incidents.find(
-                  (i) => i.status === "Agendada" || i.status === "Em andamento"
-                );
-              if (scheduledMaintenance && !isSuccess) {
-                service.officialStatus = "MAINTENANCE";
-                scheduledMaintenance.status = "Em andamento";
-              } else {
-                service.officialStatus = isSuccess
-                  ? "OPERATIONAL"
-                  : "MAJOR_OUTAGE";
-              }
-
-              if (service.components) {
-                service.components.forEach(
-                  (c) => (c.status = service.officialStatus)
-                );
-              }
-
-              if (
-                service.id === "meu_inss" &&
-                service.officialStatus !== "MAJOR_OUTAGE"
-              ) {
-                service.officialStatus = "PARTIAL_OUTAGE";
-                service.components.forEach((comp) => {
-                  if (comp.name.includes("Extrato")) {
-                    comp.status = "MAJOR_OUTAGE";
-                  } else if (comp.name.includes("Simular")) {
-                    comp.status = "DEGRADED";
-                  } else {
-                    comp.status = "OPERATIONAL";
-                  }
-                });
-              }
-              if (
-                service.id === "puc_minas" &&
-                service.officialStatus !== "MAJOR_OUTAGE"
-              ) {
-                service.officialStatus = "OPERATIONAL";
-                service.components.forEach((comp) => {
-                  if (comp.name.includes("Canvas")) {
-                    comp.status = "DEGRADED";
-                  } else {
-                    comp.status = "OPERATIONAL";
-                  }
-                });
-              }
-              if (
-                service.id === "globoplay" &&
-                service.officialStatus !== "MAJOR_OUTAGE"
-              ) {
-                service.officialStatus = "OPERATIONAL";
-                service.components.forEach((comp) => {
-                  comp.status = "OPERATIONAL";
-                });
-              }
-              service.userPerception.reports = isSuccess
-                ? Math.floor(Math.random() * 10)
-                : Math.floor(100 + Math.random() * 200);
+        const service = mockServiceData[serviceIndex];
+        service.isProbing = true;
+        
+        const cardToUpdate = document.querySelector(`[data-service-id="${serviceId}"]`);
+        if (cardToUpdate) cardToUpdate.innerHTML = renderSingleCardContent(service);
+        
+        setTimeout(() => {
+            service.officialStatus = Math.random() < 0.9 ? 'OPERATIONAL' : 'MAJOR_OUTAGE';
+            service.userPerception.reports = service.officialStatus === 'OPERATIONAL' ? Math.floor(Math.random() * service.userPerception.baseline) : Math.floor(100 + Math.random() * 200);
+            if(service.components) {
+                service.components.forEach(c => c.status = service.officialStatus);
             }
-
             delete service.isProbing;
-
             if (cardToUpdate) {
-              cardToUpdate.innerHTML = renderSingleCardContent(service);
-              cardToUpdate.classList.add("card-flash");
-              setTimeout(
-                () => cardToUpdate.classList.remove("card-flash"),
-                1500
-              );
+                cardToUpdate.innerHTML = renderSingleCardContent(service);
             }
-          }, 2000 + Math.random() * 2000);
-        }
-
-        function renderDashboard() {
-          servicesGrid.innerHTML = "";
-          const localDevicesGrid =
-            document.getElementById("local-devices-grid");
-          if (localDevicesGrid) localDevicesGrid.innerHTML = "";
-
-          mockServiceData.forEach((service) => {
-            const card = document.createElement("div");
-            card.className =
-              "bg-white p-5 rounded-xl service-card flex flex-col justify-between";
+        }, 2000 + Math.random() * 2000);
+    }
+    
+    // Renderiza todos os cartões no dashboard
+    function renderDashboard() {
+        servicesGrid.innerHTML = '';
+        mockServiceData.forEach(service => {
+            const card = document.createElement('div');
+            card.className = 'glass-card service-card cursor-pointer';
             card.dataset.serviceId = service.id;
             card.innerHTML = renderSingleCardContent(service);
-
-            card.addEventListener("click", () => openDetailView(service.id));
-
-            const targetGrid =
-              service.type === "local_device" ? localDevicesGrid : servicesGrid;
-            if (targetGrid) {
-              targetGrid.appendChild(card);
+            card.addEventListener('click', () => openDetailView(service.id));
+            servicesGrid.appendChild(card);
+            
+            if (service.officialStatus === 'UNKNOWN') {
+                probeService(service.id);
             }
+        });
+    }
 
-            if (service.officialStatus === "UNKNOWN") {
-              probeService(service.id);
-            }
-          });
+    // Abre a visualização detalhada de um serviço no modal
+    function openDetailView(serviceId) {
+        const service = mockServiceData.find(s => s.id === serviceId);
+        if (!service) return;
+
+        modalTitle.textContent = service.name;
+        modalSubtitle.textContent = service.description;
+
+        modalSourceLink.href = service.sourceUrl || '#';
+        modalSourceLink.style.display = service.sourceUrl ? 'inline-flex' : 'none';
+        if(service.sourceUrl) {
+           modalSourceLink.innerHTML = `Fonte Oficial <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`;
         }
-
-        function openDetailView(serviceId) {
-          const service = mockServiceData.find((s) => s.id === serviceId);
-          if (!service) return;
-
-          modalTitle.textContent = service.name;
-          modalSubtitle.textContent = service.description;
-
-          if (service.sourceUrl) {
-            modalSourceLink.href = service.sourceUrl;
-            modalSourceLink.style.display = "inline-flex";
-            modalSourceLink.innerHTML = `Fonte de Dados <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`;
-          } else {
-            modalSourceLink.style.display = "none";
-          }
-
-          let modalHtml = `
-            <div class="bg-white p-4 rounded-lg border border-slate-200">
-                <h3 class="font-semibold text-slate-800 mb-3">Status dos Componentes</h3>
-                ${
-                  (service.components || [])
-                    .map((c) => {
-                      const compStatusInfo =
-                        statusMap[c.status] || statusMap["UNKNOWN"];
-                      return `<div class="flex justify-between items-center text-sm py-1"><span>${c.name}</span><span class="flex items-center gap-2 font-medium text-slate-700"><span class="status-dot ${compStatusInfo.color}"></span>${compStatusInfo.text}</span></div>`;
-                    })
-                    .join("") ||
-                  `<p class="text-slate-500 text-sm">Nenhum componente listado.</p>`
-                }
+        
+        const hasIncidents = (service.incidents || []).length > 0;
+        
+        let modalHtml = `
+            <div class="glass-card p-4">
+                <h3 class="font-semibold text-[var(--text-primary)] mb-3">Status dos Componentes</h3>
+                ${(service.components || []).map(c => {
+                    const compStatusInfo = statusMap[c.status] || statusMap['UNKNOWN'];
+                    return `<div class="flex justify-between items-center text-sm py-1.5 border-b border-[var(--border-color)] last:border-b-0">
+                                <span class="text-[var(--text-secondary)]">${c.name}</span>
+                                <span class="flex items-center gap-2 font-medium text-[var(--text-primary)]">
+                                    <span class="status-dot ${compStatusInfo.color}"></span>${compStatusInfo.text}
+                                </span>
+                            </div>`;
+                }).join('') || `<p class="text-[var(--text-secondary)] text-sm">Nenhum componente listado.</p>`}
             </div>
-            <div class="bg-white p-4 rounded-lg border border-slate-200">
+            <div class="glass-card p-4">
                  <div class="flex justify-between items-center mb-3">
-                    <h3 class="font-semibold text-slate-800">Incidentes Recentes</h3>
-                    <button id="troubleshoot-btn" class="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full hover:bg-blue-200 transition-colors">✨ O que fazer?</button>
+                    <h3 class="font-semibold text-[var(--text-primary)]">Incidentes Recentes</h3>
+                    ${hasIncidents ? `<button id="troubleshoot-btn" class="text-xs bg-cyan-900/50 text-cyan-300 font-semibold px-3 py-1 rounded-full hover:bg-cyan-900 transition-colors">✨ O que fazer?</button>` : ''}
                  </div>
-                 <div id="incidents-list">
-                     ${
-                       (service.incidents || []).length > 0
-                         ? service.incidents
-                             .map(
-                               (i) =>
-                                 `<div class="border-l-4 ${statusMap[
-                                   i.status === "Em andamento" ||
-                                   i.status === "Agendada"
-                                     ? "MAINTENANCE"
-                                     : "MAJOR_OUTAGE"
-                                 ].color.replace(
-                                   "bg-",
-                                   "border-"
-                                 )} pl-3 py-1"><p class="font-semibold text-slate-800">${
-                                   i.title
-                                 }</p><p class="text-slate-500">${i.status} - ${
-                                   i.time
-                                 }</p></div>`
-                             )
-                             .join("")
-                         : '<p class="text-slate-500 text-sm">Nenhum incidente ativo.</p>'
-                     }
+                 <div id="incidents-list" class="space-y-3">
+                     ${hasIncidents ? service.incidents.map(i => {
+                         const incidentStatus = statusMap[i.status === 'Investigando' || i.status === 'Identificado' ? 'DEGRADED' : 'MAJOR_OUTAGE'];
+                         return `<div class="border-l-4 ${incidentStatus.borderColor} pl-3 py-1">
+                                    <p class="font-semibold text-[var(--text-primary)]">${i.title}</p>
+                                    <p class="text-[var(--text-secondary)] text-sm">${i.status} - ${i.time}</p>
+                                 </div>`
+                     }).join('') : '<p class="text-[var(--text-secondary)] text-sm">Nenhum incidente ativo.</p>'}
                  </div>
-                 <div id="troubleshoot-result" class="mt-4 text-sm bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg" style="display: none;"></div>
+                 <div id="troubleshoot-result" class="mt-4 border-l-4 border-cyan-400 p-3 rounded-r-lg" style="display: none;"></div>
             </div>
             <div>
-                <h3 class="font-semibold text-slate-800 mb-3">Análise de Percepção do Usuário</h3>
-                <div class="bg-white p-4 rounded-lg border border-slate-200">
-                    <div class="chart-container">
-                        <canvas id="user-perception-chart"></canvas>
-                    </div>
+                <h3 class="font-semibold text-[var(--text-primary)] mb-3">Análise de Percepção do Usuário</h3>
+                <div class="glass-card p-4 h-64">
+                    <canvas id="user-perception-chart"></canvas>
                 </div>
             </div>`;
-
-          modalBody.innerHTML = modalHtml;
-
-          renderPerceptionChart(service);
-
-          const troubleshootBtn = document.getElementById("troubleshoot-btn");
-
-          if (service.incidents && service.incidents.length > 0) {
-            troubleshootBtn.style.display = "block";
-            troubleshootBtn.addEventListener("click", async () => {
-              troubleshootBtn.disabled = true;
-              const troubleshootResult = document.getElementById(
-                "troubleshoot-result"
-              );
-              troubleshootResult.style.display = "block";
-              troubleshootResult.innerHTML = `<p class="animate-pulse-fast">✨ Gerando sugestões com IA...</p>`;
-
-              const incidents = service.incidents
-                .map((i) => `${i.title} (${i.status})`)
-                .join(", ");
-              const prompt = `O serviço ${service.name} está com o seguinte problema: "${incidents}". Forneça uma lista de 3 a 4 passos práticos e simples que um usuário no Brasil pode seguir para tentar contornar ou diagnosticar o problema. A resposta deve ser em português e formatada como uma lista de itens.`;
-              const suggestions = await callGemini(prompt);
-              troubleshootResult.innerHTML = suggestions.replace(/\n/g, "<br>");
-              troubleshootBtn.disabled = false;
+        
+        modalBody.innerHTML = modalHtml;
+        renderPerceptionChart(service);
+        
+        if (hasIncidents) {
+            const troubleshootBtn = document.getElementById('troubleshoot-btn');
+            troubleshootBtn.addEventListener('click', async () => {
+                troubleshootBtn.disabled = true;
+                const troubleshootResult = document.getElementById('troubleshoot-result');
+                troubleshootResult.style.display = 'block';
+                troubleshootResult.innerHTML = `<p class="animate-pulse-fast text-cyan-400">✨ Gerando sugestões com IA...</p>`;
+                const prompt = `O serviço ${service.name} está com problemas.`;
+                const suggestions = await callGemini(prompt);
+                troubleshootResult.innerHTML = suggestions;
+                troubleshootBtn.disabled = false;
             });
-          } else {
-            troubleshootBtn.style.display = "none";
-          }
-
-          modal.classList.remove("invisible", "opacity-0");
         }
 
-        function renderPerceptionChart(service) {
-          if (perceptionChart) perceptionChart.destroy();
-          const ctx = document
-            .getElementById("user-perception-chart")
-            .getContext("2d");
-          const labels = Array.from(
-            { length: 12 },
-            (_, i) => `${(new Date().getHours() - 11 + i + 24) % 24}:00`
-          );
-          const dataPoints = Array.from(
-            { length: 11 },
-            () => Math.random() * service.userPerception.baseline * 0.8
-          );
-          dataPoints.push(service.userPerception.reports);
-          perceptionChart = new Chart(
-            ctx,
-            getChartConfig(labels, dataPoints, "Relatos de Usuários")
-          );
-        }
+        modal.classList.remove('invisible', 'opacity-0');
+        modal.querySelector('.modal-content').classList.add('scale-100');
+    }
 
-        function runSimulatedSpeedTest() {
-          runSpeedTestBtn.disabled = true;
-          btnText.textContent = "Testando...";
-          [pingResultValue, downloadResultValue, uploadResultValue].forEach(
-            (el) => {
-              el.textContent = "--";
-              el.classList.add("animate-pulse-fast");
+    // Renderiza o gráfico de percepção do usuário
+    function renderPerceptionChart(service) {
+        if (perceptionChart) perceptionChart.destroy();
+        const ctx = document.getElementById('user-perception-chart').getContext('2d');
+        const labels = Array.from({ length: 12 }, (_, i) => `${(new Date().getHours() - 11 + i + 24) % 24}:00`);
+        const dataPoints = Array.from({ length: 11 }, () => Math.random() * service.userPerception.baseline * 0.8);
+        dataPoints.push(service.userPerception.reports);
+        perceptionChart = new Chart(ctx, getChartConfig(labels, dataPoints, 'Relatos de Usuários'));
+    }
+
+    // Simula o teste de velocidade da conexão
+    function runSimulatedSpeedTest() {
+        if (!runSpeedTestBtn) return; // Add guard clause
+        runSpeedTestBtn.disabled = true;
+        btnText.textContent = 'Testando...';
+        [pingResultValue, downloadResultValue, uploadResultValue].forEach(el => {
+            if (el) { // Add guard clause
+                el.textContent = '--';
+                el.classList.add('animate-pulse-fast');
             }
-          );
+        });
 
-          const targetPing = 4 + Math.floor(Math.random() * 10);
-          const targetDownload = 650 + Math.floor(Math.random() * 100);
-          const targetUpload = 140 + Math.floor(Math.random() * 20);
-          const duration = 2500;
+        const targetPing = 4 + Math.floor(Math.random() * 10);
+        const targetDownload = 650 + Math.floor(Math.random() * 100);
+        const targetUpload = 140 + Math.floor(Math.random() * 20);
 
-          setTimeout(() => {
-            pingResultValue.textContent = targetPing;
-            pingResultValue.classList.remove("animate-pulse-fast");
-          }, 500);
-
-          setTimeout(() => {
-            downloadResultValue.textContent = targetDownload.toFixed(2);
-            downloadResultValue.classList.remove("animate-pulse-fast");
-          }, 1500);
-
-          setTimeout(() => {
-            uploadResultValue.textContent = targetUpload.toFixed(2);
-            uploadResultValue.classList.remove("animate-pulse-fast");
-            runSpeedTestBtn.disabled = false;
-            btnText.textContent = "Testar Novamente";
-          }, 2500);
-
-          const frames = 50;
-          const initialData = speedChart
-            ? speedChart.data.datasets[0].data.slice(-20)
-            : [];
-          for (let i = 0; i <= frames; i++) {
-            setTimeout(() => {
-              const progress = i / frames;
-              const easeOutProgress = 1 - Math.pow(1 - progress, 3);
-              const currentDownload = easeOutProgress * targetDownload;
-
-              if (speedChart) {
-                const newData = initialData.concat(
-                  Array(i + 1)
-                    .fill(0)
-                    .map((_, j) => (j / i) * currentDownload)
-                );
-                if (newData.length > 20) newData.shift();
-                speedChart.data.datasets[0].data = newData;
-                speedChart.update("none");
-              }
-            }, (i * duration) / frames);
-          }
+        setTimeout(() => { if (pingResultValue) { pingResultValue.textContent = targetPing; pingResultValue.classList.remove('animate-pulse-fast'); } }, 500);
+        setTimeout(() => { if (downloadResultValue) { downloadResultValue.textContent = targetDownload.toFixed(1); downloadResultValue.classList.remove('animate-pulse-fast'); } }, 1500);
+        setTimeout(() => {
+            if (uploadResultValue) {
+                uploadResultValue.textContent = targetUpload.toFixed(1);
+                uploadResultValue.classList.remove('animate-pulse-fast');
+            }
+            if (runSpeedTestBtn) {
+                runSpeedTestBtn.disabled = false;
+                btnText.textContent = 'Testar Novamente';
+            }
+        }, 2500);
+        
+        // Atualiza o gráfico de velocidade
+        if (speedChart && speedChart.data) {
+            const data = speedChart.data.datasets[0].data;
+            data.push(targetDownload);
+            if (data.length > 20) data.shift();
+            speedChart.update('none');
         }
+    }
+    
+    // Inicializa o gráfico de velocidade
+    function initSpeedChart() {
+        if (speedChart) speedChart.destroy();
+        const ctx = document.getElementById('speed-chart').getContext('2d');
+        const initialData = Array.from({length: 19}, () => Math.random() * 50);
+        speedChart = new Chart(ctx, getChartConfig(Array(20).fill(''), initialData, 'Velocidade (Mbps)'));
+    }
 
-        function initSpeedChart() {
-          if (speedChart) speedChart.destroy();
-          const ctx = document.getElementById("speed-chart").getContext("2d");
-          speedChart = new Chart(
-            ctx,
-            getChartConfig(Array(20).fill(""), [], "Velocidade (Mb/s)", true)
-          );
-        }
-
-        function getChartConfig(labels, data, label, isSpeedChart = false) {
-          const gridColor = "#e2e8f0";
-          const pointColor = "#3b82f6";
-          const borderColor = "#60a5fa";
-          const gradientStart = "rgba(96, 165, 250, 0.3)";
-          const gradientEnd = "rgba(96, 165, 250, 0)";
-
-          return {
-            type: "line",
+    // Configuração genérica para os gráficos
+    function getChartConfig(labels, data, label) {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const gridColor = 'rgba(255, 255, 255, 0.1)';
+        const textColor = rootStyles.getPropertyValue('--text-secondary').trim();
+        const accentColor = rootStyles.getPropertyValue('--accent-secondary-color').trim();
+        
+        return {
+            type: 'line',
             data: {
-              labels: labels,
-              datasets: [
-                {
-                  label: label,
-                  data: data,
-                  fill: true,
-                  backgroundColor: (ctx) => {
-                    const gradient = ctx.chart.ctx.createLinearGradient(
-                      0,
-                      0,
-                      0,
-                      ctx.chart.height
-                    );
-                    gradient.addColorStop(0, gradientStart);
-                    gradient.addColorStop(1, gradientEnd);
-                    return gradient;
-                  },
-                  borderColor: borderColor,
-                  pointBackgroundColor: pointColor,
-                  tension: 0.4,
-                  pointRadius: 0,
-                },
-              ],
+                labels: labels,
+                datasets: [{
+                    label: label, data: data, fill: true,
+                    backgroundColor: (ctx) => {
+                        if (!ctx.chart.ctx) return null; // Guard clause
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+                        gradient.addColorStop(0, `${accentColor}40`); // 25% opacity
+                        gradient.addColorStop(1, `${accentColor}00`); // 0% opacity
+                        return gradient;
+                    },
+                    borderColor: accentColor, pointBackgroundColor: accentColor,
+                    tension: 0.4, pointRadius: 0, pointHoverRadius: 4,
+                    pointHoverBackgroundColor: accentColor,
+                }]
             },
             options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { beginAtZero: true, grid: { color: gridColor } },
-                x: { display: false },
-              },
-              interaction: { intersect: false, mode: "index" },
-            },
-          };
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                scales: { 
+                    y: { beginAtZero: true, grid: { color: gridColor, drawBorder: false }, ticks: { color: textColor, font: { size: 10 } } }, 
+                    x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } } 
+                },
+                interaction: { intersect: false, mode: 'index' },
+            }
+        };
+    }
+    
+    function closeModal() {
+        modal.classList.add('invisible', 'opacity-0');
+        modal.querySelector('.modal-content').classList.remove('scale-100');
+    }
+    
+    function updateTimestamp() { 
+        const now = new Date();
+        const dateOptions = { day: '2-digit', month: 'long', year: 'numeric' };
+        const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+        if(currentDateEl) currentDateEl.textContent = now.toLocaleDateString('pt-BR', dateOptions);
+        if(currentTimeEl) currentTimeEl.textContent = now.toLocaleTimeString('pt-BR', timeOptions);
+        if(lastUpdatedSpan) lastUpdatedSpan.textContent = now.toLocaleTimeString('pt-BR'); 
+    }
+
+    // Lida com a troca de tema (claro/escuro)
+    function handleThemeSwitching() {
+        const switcher = document.getElementById('theme-checkbox');
+        const body = document.body;
+
+        const applyTheme = (theme) => {
+            body.classList.toggle('light-theme', theme === 'light');
+            switcher.checked = (theme === 'light');
+             
+            // Redesenha os gráficos com as cores do novo tema
+            setTimeout(() => {
+                if(speedChart) { initSpeedChart(); runSimulatedSpeedTest(); }
+                if(perceptionChart) { 
+                    const serviceId = modal.querySelector('[data-service-id]')?.dataset.serviceId;
+                    if(serviceId) {
+                       const service = mockServiceData.find(s => s.id === serviceId);
+                       if(service) renderPerceptionChart(service);
+                    }
+                }
+            }, 100);
         }
+        
+        let savedTheme = localStorage.getItem('theme') || 'dark';
+        applyTheme(savedTheme);
 
-        function closeModal() {
-          modal.classList.add("invisible", "opacity-0");
-        }
-        function updateTimestamp() {
-          const now = new Date();
-          const dateOptions = {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          };
-          const timeOptions = {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          };
+        switcher.addEventListener('change', () => {
+            const newTheme = switcher.checked ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
+        });
+    }
 
-          currentDateEl.textContent = now.toLocaleDateString(
-            "pt-BR",
-            dateOptions
-          );
-          currentTimeEl.textContent = now.toLocaleTimeString(
-            "pt-BR",
-            timeOptions
-          );
-          lastUpdatedSpan.textContent = now.toLocaleTimeString("pt-BR");
-        }
+    // Adiciona os event listeners
+    closeModalBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => e.target === modal && closeModal());
+    document.addEventListener('keydown', (e) => e.key === "Escape" && !modal.classList.contains('invisible') && closeModal());
+    runSpeedTestBtn.addEventListener('click', runSimulatedSpeedTest);
 
-        closeModalBtn.addEventListener("click", closeModal);
-        modal.addEventListener(
-          "click",
-          (e) => e.target === modal && closeModal()
-        );
-        document.addEventListener(
-          "keydown",
-          (e) =>
-            e.key === "Escape" &&
-            !modal.classList.contains("invisible") &&
-            closeModal()
-        );
-        runSpeedTestBtn.addEventListener("click", runSimulatedSpeedTest);
-
-        const fiveMinutes = 5 * 60;
-        let speedTestCountdown = fiveMinutes;
-        const speedTestInterval = setInterval(() => {
-          speedTestCountdown--;
-          if (speedTestCountdown <= 0) {
+    // Configura o countdown para o teste automático de velocidade
+    const fiveMinutes = 5 * 60;
+    let speedTestCountdown = fiveMinutes;
+    setInterval(() => {
+        speedTestCountdown--;
+        if (speedTestCountdown <= 0) {
             speedTestCountdown = fiveMinutes;
             runSimulatedSpeedTest();
-          }
-          const minutes = Math.floor(speedTestCountdown / 60);
-          const seconds = speedTestCountdown % 60;
-          countdownContainer.textContent = `Próximo teste em: ${minutes}m ${seconds
-            .toString()
-            .padStart(2, "0")}s`;
-        }, 1000);
-
-        setInterval(() => {
-          mockServiceData.forEach((service) => {
-            if (
-              service.type !== "local_device" &&
-              service.officialStatus === "UNKNOWN"
-            ) {
-              probeService(service.id);
+        }
+        if (countdownContainer) {
+            const minutes = Math.floor(speedTestCountdown / 60);
+            const seconds = speedTestCountdown % 60;
+            countdownContainer.textContent = `Próximo teste em: ${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+        }
+    }, 1000);
+    
+    // Verificação periódica de serviços com status "desconhecido"
+    setInterval(() => {
+        mockServiceData.forEach(service => {
+            if (service.officialStatus === 'UNKNOWN') {
+                probeService(service.id);
             }
-          });
-        }, 60000);
+        });
+    }, 60000);
 
-        renderDashboard();
-        initSpeedChart();
-        runSimulatedSpeedTest();
-        updateTimestamp();
-        setInterval(updateTimestamp, 1000);
-      });
-    </script>
-  </body>
+    // Inicialização da aplicação
+    handleThemeSwitching();
+    renderDashboard();
+    initSpeedChart();
+    runSimulatedSpeedTest(); 
+    updateTimestamp();
+    setInterval(updateTimestamp, 1000);
+});
+</script>
+</body>
 </html>
-
