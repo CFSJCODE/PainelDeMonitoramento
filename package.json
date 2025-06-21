@@ -1,0 +1,30 @@
+{
+  "name": "painel-de-monitoramento-backend",
+  "version": "1.0.0",
+  "description": "Servidor para o painel de monitoramento de status de serviços.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "monitoring",
+    "status-panel",
+    "express",
+    "nodejs"
+  ],
+  "author": "CFSJCODE",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "get-ssl-certificate": "^2.4.4",
+    "node-fetch": "^3.3.2",
+    "pino": "^9.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
